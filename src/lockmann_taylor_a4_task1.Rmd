@@ -1,0 +1,69 @@
+---
+title: "Assignment 4, Task 1"
+author: "Taylor Lockmann"
+date: "3/6/2021"
+output: 
+  html_document:
+    code_folding: hide
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+library(tidyverse)
+library(here)
+library(janitor)
+library(naniar)
+
+# For cluster analysis:
+library(NbClust)
+library(cluster)
+library(factoextra)
+library(dendextend)
+library(ggdendro)
+```
+### Task 1: Agglomerative hierarchical clustering 
+
+The following diagram explores similarities in stream chemistry in the Santa Barbara Coastal drainage area. 
+```{r}
+# Read in the data, clean up names, drop the timestamp column, and replace "-999" values with NA
+stream_chemistry <- read_csv(here("data", "sbc_lter_registered_stream_chemistry.csv")) %>% 
+  clean_names() %>% 
+  select(-timestamp_local) %>% 
+  replace_with_na_all(condition = ~.x == -999)
+
+# Create a data frame with the mean of each site's metrics, keeping in instances of NAs
+stream_means <- aggregate(stream_chemistry[, 2:11], list(stream_chemistry$site_code), mean, na.rm = TRUE)
+
+# Drop rows where any of our measurement variables are missing
+streams_complete <- stream_means %>% 
+  drop_na()
+
+# Scale the measurements
+streams_scale <- streams_complete %>% 
+  select(2:11) %>% 
+  scale()
+
+# Add site number as the row names
+rownames(streams_scale) <- streams_complete$Group.1
+
+# Compute Euclidian distances 
+stream_euc_distance <- dist(streams_scale, method = "euclidian")
+
+# View the output of euclidian distances:
+#View(stream_euc_distance)
+
+# Hierarchical clustering with complete linkage
+streams_hc_complete <- hclust(stream_euc_distance, method = "complete")
+
+# Make the plot:
+ggdendrogram(streams_hc_complete,
+             rotate = TRUE)+
+  theme_minimal()+
+  labs(x = "Site Code")
+```
+
+**Figure 1:** Dendrogram showing multivariate clustering for water chemistry by site. Analysis was performed using hierarchical clustering by complete linkage. From this diagram we can make the broad assumptions that sites MC00 and AB00 are the most similar sites, while site ON02 is the most dissimilar from the other sites.
+
+**Source:** Santa Barbara Coastal LTER and J. Melack. 2019. SBC LTER: Land: Stream chemistry in the Santa Barbara Coastal drainage area, ongoing since 2000 ver 16. Environmental Data Initiative. https://doi.org/10.6073/pasta/67a558a24ceed9a0a5bf5e46ab841174. 
+
+##### End Assignment 4, Task 1
