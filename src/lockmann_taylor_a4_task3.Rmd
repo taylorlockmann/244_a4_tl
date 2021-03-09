@@ -1,0 +1,52 @@
+---
+title: "Assignment 4, Task 3"
+author: "Taylor Lockmann"
+date: "3/8/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+library(tidyverse)
+library(boot)
+```
+
+```{r}
+# Make the vector data 
+nb_exclusion <- c(1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0) # Using 1's as "yes experiencing exclusionary etc conduct" and 0 as "nos"
+
+# NOTE: I am using binary numbers here because then to take the "proportion" of an outcome, we can use the mean of a sample. 
+
+# Make a function that calculates the proportion of a specified outcome for each bootstrap sample.
+prop_fun <- function (x, i) {mean(x[i])}
+
+# Create 10,000 bootstrap samples by resampling from our nb_exclusion vector, using the function we made to calculate the mean of each
+nb_10k <- boot(nb_exclusion,
+               statistic = prop_fun,
+               R = 10000)
+
+# Look at the output of our bootstrap:
+nb_10k
+
+# Look at our original sample mean versus the bootstrap means
+#nb_10k$t0
+#nb_10k$t
+
+# Make the bootstrap sample data into a data frame
+nb_10k_df <- data.frame(bs_mean = nb_10k$t)
+
+# Make a histogram of our 10k sample means:
+ggplot(data = nb_10k_df, aes(x = bs_mean))+
+  geom_histogram()
+```
+
+```{r}
+# Now find the 95% confidence interval for the bootstrapped distribution
+
+boot.ci(nb_10k, conf = 0.95)
+```
+
+From this information, we can interpret this as indicating that we can expect that 95 of 100 calculated confidence intervals between 0.4519 (45%) and 0.7703 (77%) will contain the actual proportion of nonbinary/genderqueer people who have experienced "exclusionary, offensive, hostile, or intimidating conduct."
+
+
+##### End Assignment 4, Task 3

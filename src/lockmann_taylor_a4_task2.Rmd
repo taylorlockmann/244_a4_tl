@@ -1,0 +1,152 @@
+---
+title: "Assignment 4, Task 2"
+author: "Taylor Lockmann"
+date: "3/8/2021"
+output: 
+  html_document:
+    code_folding: hide
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+
+library(tidyverse)
+library(ggplot2)
+library(nlstools)
+library(here)
+library(gt)
+```
+
+```{r}
+# Data wrangling!
+
+
+# Read in the data
+
+fish_catch <- read_csv(here("data", "fish_catch.csv"))
+
+fish_catch_1 <- fish_catch[-(1:4),] # Remove first four rows
+  
+fish_data <- fish_catch_1[-(64:67),] # Remove last four rows
+
+fish_data <- fish_data %>% 
+  rename(
+    "year" = "World Wild Fish Catch and Farmed Fish Production, 1950-2012",
+    "wild_catch" = "X2",
+    "farmed_fish" = "X3",
+    "total" = "X4"
+  ) 
+# Save the columns with numbers in them as numeric:
+fish_data$total <- as.numeric(fish_data$total)
+fish_data$wild_catch <- as.numeric(fish_data$wild_catch)
+fish_data$farmed_fish <- as.numeric(fish_data$farmed_fish)
+fish_data$year <- as.numeric(fish_data$year)
+
+fish_data <- fish_data %>% 
+  mutate(year_new = (year - 1950))
+```
+
+## 1. Exploratory graph of wild catch over time
+
+```{r}
+ggplot(data = fish_data, aes(x = year_new, y = wild_catch))+
+  geom_point()+
+  theme_minimal()+
+  labs(
+    x = "Year",
+    y = "Wild Catch (millions of tons)"
+  )
+```
+
+#### What type of relationship describes this trend?
+
+It appears as if a logarithmic relationship describes this trend, leveling off at about year 40. The model for this relationship would be:
+
+$P(t)=\frac{K}{1+Ae^{-kt}}$, where
+
+- $K$ is the carrying capacity
+- $A$ is $\frac{K-P_0}{P_0}$
+- $k$ is the growth rate constant
+
+```{r}
+# Log transform the data we are evaluating, up to year 40, to estimate k
+fish_data_exp <- fish_data %>% 
+  filter(year_new < 40) %>% 
+  mutate(ln_wild_catch = log(wild_catch))
+
+fish_lm_k <- lm(ln_wild_catch ~ year_new, data = fish_data_exp)
+fish_lm_k
+
+# So it appears our coefficient (k) is approximately 0.04.
+```
+
+My initial estimate for *k* is 0.04. We can also estimate that *K* is close to 90 and *A* is 4.2.
+
+## 2. Use Nonlinear Least Squares to find parameters.
+
+Now that we have estimates for *k*, *K* and *A*, we'll use NLS to find the actual values.
+
+```{r}
+# Make our NLS model and run it
+fish_nls <- nls(wild_catch ~ K/(1+A*exp(-r*year_new)),
+                data = fish_data,
+                start = list(K = 90, A = 4.2, r = 0.04),
+                trace = TRUE)
+
+# Format our model's outputs in tidy format
+fish_model <- broom::tidy(fish_nls)
+```
+
+Our model with estimated parameters is:
+$$P(t) = \frac{100.27}{1+4.316e^{-0.070t}}$$
+
+```{r}
+# Make a pretty table with our model outputs
+fish_model %>% 
+  gt() %>% 
+  tab_header(
+    title = "Outcome of Nonlinear Least Squares parameters analysis",
+    subtitle = "Wild fish catch over time (all units in millions of tons)"
+  ) %>% 
+  fmt_number(
+    columns = vars(estimate, std.error, statistic),
+    decimals = 3
+  ) %>% 
+  cols_label(
+    term = "Term",
+    estimate = "Estimate",
+    std.error = "Standard Error",
+    statistic = "Statistic",
+    p.value = "p-value"
+  ) %>% 
+  tab_options(
+    table.width = pct(80)
+  )
+```
+
+### 3. Combine original data and model output
+
+```{r}
+# Have our model make predictions at all the times in the original fish data
+fish_predict <- predict(fish_nls)
+
+# Bind predictions to original data frame:
+fish_complete <- data.frame(fish_data, fish_predict)
+
+# Plot together
+ggplot(data = fish_complete, aes(x = year_new, y = wild_catch))+
+  geom_point()+
+  geom_line(aes(x = year_new, y = fish_predict))+
+  theme_minimal()+
+  labs(
+    x = "Year",
+    y = "Wild Catch (millions of tons)"
+  )
+```
+
+
+**Source:** Global wild fish catch and aquaculture production, compiled by Earth Policy Institute with 1950-2010 from U.N. Food and Agriculture Organization (FAO), Global Capture Production and Global Aquaculture Production, electronic databases, at www.fao.org/fishery/topic/16140/en.
+
+
+
+##### End Assignment 4, Task 2
